@@ -5,16 +5,16 @@ import { DateTime, IANAZone } from "luxon";
 /**
  * POST /api/parse-date
  * body: { 
- *   text: string,           // Natural language like "tomorrow at 2pm"
- *   timeZone?: string,      // IANA timezone (defaults to "America/Chicago")
- *   now?: string            // Optional current time override (ISO format)
+ *   humanDate: string,        // Natural language date like "next week monday"
+ *   humanTime: string,        // Time like "2pm" or "14:30"
+ *   timeZone?: string,        // IANA timezone (defaults to "America/Chicago")
+ *   now?: string              // Optional current time override (ISO format)
  * }
  * returns: { convertedDate: string }  // ISO with proper timezone offset
  * 
  * Examples:
- * - "tomorrow at 2pm" → 2024-01-16T14:00:00-06:00
- * - "next Wednesday at 4pm" → 2024-01-17T16:00:00-06:00
- * - "10am" → 2024-01-15T10:00:00-06:00 (today if not passed, tomorrow if passed)
+ * - humanDate: "next week monday", humanTime: "2pm" → 2024-01-22T14:00:00-06:00
+ * - humanDate: "next month 15th", humanTime: "afternoon" → 2024-02-15T12:00:00-06:00
  */
 export default async function handler(req, res) {
     // Set CORS headers for Make.com integration
@@ -35,13 +35,20 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { text, timeZone, now } = req.body || {};
+        const { humanDate, humanTime, timeZone, now } = req.body || {};
 
-        // Validate required input
-        if (!text || typeof text !== "string") {
+        // Validate required inputs
+        if (!humanDate || typeof humanDate !== "string") {
             return res.status(400).json({
-                error: "Missing or invalid 'text' parameter",
-                message: "Please provide a natural language date/time request (e.g., 'tomorrow at 2pm')"
+                error: "Missing or invalid 'humanDate' parameter",
+                message: "Please provide a natural language date request (e.g., 'next week monday')"
+            });
+        }
+
+        if (!humanTime || typeof humanTime !== "string") {
+            return res.status(400).json({
+                error: "Missing or invalid 'humanTime' parameter",
+                message: "Please provide a time (e.g., '2pm', '14:30')"
             });
         }
 
@@ -55,25 +62,51 @@ export default async function handler(req, res) {
             ? DateTime.fromISO(now, { setZone: true }).setZone(zone)
             : DateTime.now().setZone(zone);
 
-        // Parse natural language text relative to current time
-        const results = chrono.parse(text, nowZoned.toJSDate(), { forwardDate: true });
+        // Parse the date using chrono
+        const dateResults = chrono.parse(humanDate, nowZoned.toJSDate(), { forwardDate: true });
 
-        if (!results.length) {
-            // If parsing fails, return current time as fallback
-            return res.json({
-                convertedDate: nowZoned.toISO({ suppressMilliseconds: true }),
-                message: "Could not parse the provided text, returning current time"
+        if (!dateResults.length) {
+            return res.status(400).json({
+                error: "Could not parse the date",
+                message: "Unable to understand the date: " + humanDate
             });
         }
 
-        const start = results[0].start;
+        const start = dateResults[0].start;
 
-        // Extract time components from user input (preserve exactly what they said)
-        const hour = start.isCertain("hour") ? start.get("hour") : 0;
-        const minute = start.isCertain("minute") ? start.get("minute") : 0;
-        const second = start.isCertain("second") ? start.get("second") : 0;
+        // Parse the time
+        let hour = 0;
+        let minute = 0;
+        let second = 0;
 
-        // Build the date object, preserving user's exact time
+        // Handle various time formats
+        const timeMatch = humanTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+        if (timeMatch) {
+            // 12-hour format: "2pm", "2:30pm"
+            hour = parseInt(timeMatch[1]);
+            minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+
+            // Convert to 24-hour format
+            if (timeMatch[3].toLowerCase() === 'pm' && hour !== 12) {
+                hour += 12;
+            } else if (timeMatch[3].toLowerCase() === 'am' && hour === 12) {
+                hour = 0;
+            }
+        } else {
+            // 24-hour format: "14:30", "14"
+            const time24Match = humanTime.match(/(\d{1,2})(?::(\d{2}))?/);
+            if (time24Match) {
+                hour = parseInt(time24Match[1]);
+                minute = parseInt(time24Match[2]);
+            } else {
+                return res.status(400).json({
+                    error: "Could not parse the time",
+                    message: "Unable to understand the time: " + humanTime
+                });
+            }
+        }
+
+        // Build the date object
         let dt = DateTime.fromObject(
             {
                 year: start.get("year"),
@@ -98,14 +131,15 @@ export default async function handler(req, res) {
         if (!dt.isValid) {
             return res.status(400).json({
                 error: "Invalid date generated",
-                message: "Could not generate a valid date from the provided text"
+                message: "Could not generate a valid date from the provided inputs"
             });
         }
 
         return res.json({
             convertedDate: dt.toISO({ suppressMilliseconds: true }),
             timeZone: zone,
-            originalText: text
+            humanDate: humanDate,
+            humanTime: humanTime
         });
 
     } catch (error) {
