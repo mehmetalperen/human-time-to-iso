@@ -239,7 +239,8 @@ User Input → ChatGPT (format for chrono-node) → HTTP Request → Your API �
 **Day of Week Variations:**
 
 - "monday", "next monday", "this monday", "last monday"
-- "monday next week", "next week monday" (both work, give same result)
+- "monday next week" ✅ (works correctly)
+- ❌ "next week monday" → BROKEN (gives wrong day - August 27th instead of August 25th)
 
 **Week Variations:**
 
@@ -288,6 +289,11 @@ User Input → ChatGPT (format for chrono-node) → HTTP Request → Your API �
 - ❌ "last day of month" → Returns wrong date (day 19 instead of 31) - DANGEROUS: parses but gives incorrect result
 - ❌ "first monday of next month" → Returns wrong date (August 25 instead of September 1) - DANGEROUS: parses but gives incorrect result
 
+**Broken Day + Week Combinations:**
+
+- ❌ "next week monday" → Returns wrong date (August 27th instead of August 25th) - DANGEROUS: parses but gives incorrect result
+- ❌ "next week tuesday" → Returns wrong date (August 28th instead of August 26th) - DANGEROUS: parses but gives incorrect result
+
 **Holiday/Event References:**
 
 - ❌ "christmas", "new year", "valentines day" → Not recognized
@@ -306,6 +312,12 @@ User Input → ChatGPT (format for chrono-node) → HTTP Request → Your API �
 
 - "15th of next month" → "september 15th" (if we're in August)
 - "next month 20th" → "september 20th" (if we're in August)
+
+**For Broken "next week + day" patterns (These parse but give WRONG results):**
+
+- "next week monday" → "next monday" (same result, correct parsing)
+- "next week tuesday" → "next tuesday" (same result, correct parsing)
+- "next week wednesday" → "next wednesday" (same result, correct parsing)
 
 **For Business Logic (These parse but give WRONG results):**
 
