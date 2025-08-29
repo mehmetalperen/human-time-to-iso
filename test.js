@@ -2,7 +2,7 @@
 import { DateTime } from "luxon";
 
 // Mock the API function for testing
-async function testParseDate(humanDate, humanTime, timeZone = "America/Chicago", now = null) {
+async function testParseDate(humanDate, humanTime, timeZone = "America/Chicago", clientCurrentTime = null) {
     // This simulates what the API would do
     const chrono = await import("chrono-node");
     const { DateTime, IANAZone } = await import("luxon");
@@ -12,8 +12,8 @@ async function testParseDate(humanDate, humanTime, timeZone = "America/Chicago",
         : "America/Chicago";
 
     // Get current time in requested zone
-    const nowZoned = now
-        ? DateTime.fromISO(now, { setZone: true }).setZone(zone)
+    const nowZoned = clientCurrentTime
+        ? DateTime.fromISO(clientCurrentTime, { setZone: true }).setZone(zone)
         : DateTime.now().setZone(zone);
 
     console.log(`\n🔍 Testing: "${humanDate}" at "${humanTime}"`);
@@ -89,7 +89,7 @@ async function testParseDate(humanDate, humanTime, timeZone = "America/Chicago",
             day: start.get("day"),
             hour, minute, second
         },
-        { zone }
+        { zone: timeZone }
     );
 
     // Handle case where user only specified time
@@ -111,7 +111,8 @@ async function testParseDate(humanDate, humanTime, timeZone = "America/Chicago",
         convertedDate: dt.toISO({ suppressMilliseconds: true }),
         timeZone: timeZone,
         humanDate: humanDate,
-        humanTime: humanTime
+        humanTime: humanTime,
+        clientCurrentTime: clientCurrentTime
     };
 }
 

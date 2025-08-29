@@ -6,9 +6,10 @@ Convert natural language appointment requests to precise ISO datetime format wit
 
 - 🗓️ **Smart Date Parsing**: Uses chrono-node for natural language date understanding
 - ⏰ **Precise Time Handling**: Handles various time formats (12/24 hour, am/pm)
-- 🌍 **Timezone Support**: Dynamic timezone input (defaults to America/Chicago)
+- 🌍 **Timezone Support**: Required timezone input for predictable behavior
+- 🕐 **Client Time Reference**: Uses client's current time for consistent relative date calculations
 - 🔌 **Make.com Compatible**: Perfect for automation workflows with ChatGPT preprocessing
-- 🚀 **Vercel Ready**: Optimized for serverless deployment
+- 🚀 **Vercel Ready**: Optimized for serverless deployment with timezone independence
 
 ## API Endpoint
 
@@ -21,7 +22,7 @@ Convert natural language appointment requests to precise ISO datetime format wit
   "humanDate": "next week monday",
   "humanTime": "2pm",
   "timeZone": "America/Chicago",
-  "now": "2024-01-15T10:00:00Z" // Optional: override current time
+  "clientCurrentTime": "2024-01-15T10:00:00Z" // Required: client's current time
 }
 ```
 
@@ -218,7 +219,8 @@ Return ONLY the JSON object, nothing else.
   {
     "humanDate": "{{2.humanDate}}",
     "humanTime": "{{2.humanTime}}",
-    "timeZone": "{{3.timezone}}"
+    "timeZone": "{{3.timezone}}",
+    "clientCurrentTime": "{{4.clientCurrentTime}}"
   }
   ```
 
@@ -227,6 +229,8 @@ Return ONLY the JSON object, nothing else.
 ```
 User Input → ChatGPT (format for chrono-node) → HTTP Request → Your API → Perfect Result
 ```
+
+**Note**: The `clientCurrentTime` should be the current time when the request is made, typically using JavaScript's `new Date().toISOString()` or equivalent in your automation platform.
 
 ## What chrono-node Handles Well (Based on Comprehensive Testing)
 
@@ -387,6 +391,18 @@ chrono-node is excellent for simple, direct date expressions but has significant
 3. **Simple API**: No complex regex or manual date calculations
 4. **Reliable**: chrono-node gets clean, formatted input it can handle perfectly
 5. **Maintainable**: Clean, simple code that's easy to debug
+6. **Timezone Independence**: Uses client's current time as reference, making it reliable regardless of server location
+
+## Why clientCurrentTime is Required
+
+When deploying on Vercel (or any cloud platform), the server's timezone is unpredictable and can change between deployments. This makes relative date calculations unreliable when using server time as a reference.
+
+**The solution**: Require the client to send their current time (`clientCurrentTime`) and use that as the reference point for all relative date calculations. This ensures:
+
+- **Consistent behavior** regardless of where the API is hosted
+- **Predictable results** for relative expressions like "tomorrow" or "next week monday"
+- **Timezone accuracy** since we know exactly what "now" means in the client's context
+- **Reliable automation** workflows that depend on consistent date parsing
 
 ## Development
 

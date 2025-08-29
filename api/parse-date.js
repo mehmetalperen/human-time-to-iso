@@ -5,10 +5,10 @@ import { DateTime, IANAZone } from "luxon";
 /**
  * POST /api/parse-date
  * body: { 
- *   humanDate: string,        // Natural language date like "next week monday"
- *   humanTime: string,        // Time like "2pm" or "14:30"
- *   timeZone?: string,        // IANA timezone (defaults to "America/Chicago")
- *   now?: string              // Optional current time override (ISO format)
+ *   humanDate: string,           // Natural language date like "next week monday"
+ *   humanTime: string,           // Time like "2pm" or "14:30"
+ *   timeZone: string,            // IANA timezone (e.g., "America/Chicago")
+ *   clientCurrentTime: string    // Client's current time in ISO format (e.g., "2024-01-15T10:00:00Z")
  * }
  * returns: { convertedDate: string }  // ISO with proper timezone offset
  * 
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { humanDate, humanTime, timeZone, now } = req.body || {};
+        const { humanDate, humanTime, timeZone, clientCurrentTime } = req.body || {};
 
         // Validate required inputs
         if (!humanDate || typeof humanDate !== "string") {
@@ -52,17 +52,47 @@ export default async function handler(req, res) {
             });
         }
 
+        if (!timeZone || typeof timeZone !== "string") {
+            return res.status(400).json({
+                error: "Missing or invalid 'timeZone' parameter",
+                message: "Please provide a valid IANA timezone (e.g., 'America/Chicago', 'Europe/London')"
+            });
+        }
+
+        if (!clientCurrentTime || typeof clientCurrentTime !== "string") {
+            return res.status(400).json({
+                error: "Missing or invalid 'clientCurrentTime' parameter",
+                message: "Please provide the client's current time in ISO format (e.g., '2024-01-15T10:00:00Z')"
+            });
+        }
+
         // Validate and normalize timezone
-        const zone = (typeof timeZone === "string" && IANAZone.isValidZone(timeZone))
-            ? timeZone
-            : "America/Chicago";
+        if (!IANAZone.isValidZone(timeZone)) {
+            return res.status(400).json({
+                error: "Invalid timezone",
+                message: `'${timeZone}' is not a valid IANA timezone. Please use a valid timezone like 'America/Chicago' or 'Europe/London'`
+            });
+        }
 
-        // Get current time in requested zone
-        const nowZoned = now
-            ? DateTime.fromISO(now, { setZone: true }).setZone(zone)
-            : DateTime.now().setZone(zone);
+        // Parse client's current time and convert to requested timezone
+        let nowZoned;
+        try {
+            const clientTime = DateTime.fromISO(clientCurrentTime, { setZone: true });
+            if (!clientTime.isValid) {
+                return res.status(400).json({
+                    error: "Invalid clientCurrentTime format",
+                    message: "Please provide a valid ISO datetime string (e.g., '2024-01-15T10:00:00Z')"
+                });
+            }
+            nowZoned = clientTime.setZone(timeZone);
+        } catch (error) {
+            return res.status(400).json({
+                error: "Invalid clientCurrentTime format",
+                message: "Please provide a valid ISO datetime string (e.g., '2024-01-15T10:00:00Z')"
+            });
+        }
 
-        // Parse the date using chrono
+        // Parse the date using chrono with the client's time as reference
         const dateResults = chrono.parse(humanDate, nowZoned.toJSDate(), { forwardDate: true });
 
         if (!dateResults.length) {
@@ -114,7 +144,7 @@ export default async function handler(req, res) {
                 day: start.get("day"),
                 hour, minute, second
             },
-            { zone }
+            { zone: timeZone }
         );
 
         // Handle case where user only specified time (e.g., "2pm")
@@ -137,9 +167,10 @@ export default async function handler(req, res) {
 
         return res.json({
             convertedDate: dt.toISO({ suppressMilliseconds: true }),
-            timeZone: zone,
+            timeZone: timeZone,
             humanDate: humanDate,
-            humanTime: humanTime
+            humanTime: humanTime,
+            clientCurrentTime: clientCurrentTime
         });
 
     } catch (error) {
