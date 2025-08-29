@@ -77,6 +77,7 @@ export default async function handler(req, res) {
         // Parse client's current time and convert to requested timezone
         let nowZoned;
         try {
+            // Parse the client time, preserving the timezone information
             const clientTime = DateTime.fromISO(clientCurrentTime, { setZone: true });
             if (!clientTime.isValid) {
                 return res.status(400).json({
@@ -84,7 +85,12 @@ export default async function handler(req, res) {
                     message: "Please provide a valid ISO datetime string (e.g., '2024-01-15T10:00:00Z')"
                 });
             }
+
+            // Convert to the requested timezone
             nowZoned = clientTime.setZone(timeZone);
+
+
+
         } catch (error) {
             return res.status(400).json({
                 error: "Invalid clientCurrentTime format",
@@ -93,7 +99,32 @@ export default async function handler(req, res) {
         }
 
         // Parse the date using chrono with the client's time as reference
-        const dateResults = chrono.parse(humanDate, nowZoned.toJSDate(), { forwardDate: true });
+        let dateResults;
+
+        // Handle problematic cases manually for predictable behavior
+        if (humanDate.toLowerCase() === "tomorrow") {
+            // Manually calculate tomorrow based on client's current time
+            const tomorrow = nowZoned.plus({ days: 1 });
+            dateResults = [{
+                start: {
+                    get: (field) => {
+                        switch (field) {
+                            case "year": return tomorrow.year;
+                            case "month": return tomorrow.month;
+                            case "day": return tomorrow.day;
+                            case "hour": return tomorrow.hour;
+                            case "minute": return tomorrow.minute;
+                            case "second": return tomorrow.second;
+                            default: return 0;
+                        }
+                    },
+                    isCertain: () => true
+                }
+            }];
+        } else {
+            // Use chrono-node for all other date patterns
+            dateResults = chrono.parse(humanDate, nowZoned.toJSDate());
+        }
 
         if (!dateResults.length) {
             return res.status(400).json({
