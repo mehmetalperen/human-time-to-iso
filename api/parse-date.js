@@ -102,7 +102,8 @@ export default async function handler(req, res) {
         let dateResults;
 
         // Handle problematic cases manually for predictable behavior
-        if (humanDate.toLowerCase() === "tomorrow") {
+        const humanDateLower = humanDate.toLowerCase();
+        if (humanDateLower === "tomorrow") {
             // Manually calculate tomorrow based on client's current time
             const tomorrow = nowZoned.plus({ days: 1 });
             dateResults = [{
@@ -115,6 +116,26 @@ export default async function handler(req, res) {
                             case "hour": return tomorrow.hour;
                             case "minute": return tomorrow.minute;
                             case "second": return tomorrow.second;
+                            default: return 0;
+                        }
+                    },
+                    isCertain: () => true
+                }
+            }];
+        } else if (humanDateLower === "today") {
+            // Manually handle "today" to ensure it uses the client's current date
+            // This prevents issues where chrono might interpret "today" differently
+            const today = nowZoned.startOf('day');
+            dateResults = [{
+                start: {
+                    get: (field) => {
+                        switch (field) {
+                            case "year": return today.year;
+                            case "month": return today.month;
+                            case "day": return today.day;
+                            case "hour": return 0;
+                            case "minute": return 0;
+                            case "second": return 0;
                             default: return 0;
                         }
                     },
